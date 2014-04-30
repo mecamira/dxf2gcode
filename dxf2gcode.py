@@ -31,7 +31,7 @@ import sys
 
 from math import degrees, radians
 
-import logging
+import logging, time, Queue
 logger = logging.getLogger()
 
 from copy import copy, deepcopy
@@ -696,8 +696,55 @@ class Main(QtGui.QMainWindow):
         #self.textbox.text.delete(7.0, END)
         logger.info(self.tr('Loading file: %s') % filename)
         #logger.info("<a href=file:%s>%s</a>" % (filename, filename))
+            
+        self.thread=ReadDXF(self, filename)
         
-        values = ReadDXF(filename)
+        self.progressBar = QtGui.QProgressBar()
+        #self.progressBar.setTextVisible( True )
+        #self.progressBar.setFormat( "Label" )
+        self.progressBar.setRange(0, 0)
+        self.progressBar.setValue(0)
+        self.progressBar.setFixedSize(400 , 25)
+        self.progressBar.setAlignment(QtCore.Qt.AlignCenter)
+        self.progressBar.label = QtGui.QLabel()
+        self.progressBar.label.setAlignment(QtCore.Qt.AlignCenter)
+        
+        self.dialog = QtGui.QDialog()
+        vbox = QtGui.QVBoxLayout()
+        vbox.addWidget(self.progressBar.label)
+        vbox.addWidget(self.progressBar)
+        vbox.setSpacing(2)
+        self.dialog.setLayout(vbox)
+        self.dialog.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+        self.dialog.setAttribute(QtCore.Qt.WA_TranslucentBackground)
+        iconWT = QtGui.QIcon()
+        iconWT.addPixmap(QtGui.QPixmap(":images/DXF2GCODE-001.ico"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.dialog.setWindowIcon(QtGui.QIcon(iconWT))
+        #self.dialog.show()
+
+        self.thread.changeValue.connect(self.updateValuePBar)
+        self.thread.changeRange.connect(self.updateRangePBar)
+        self.thread.changeText.connect(self.updateTextPBar)
+        self.thread.done.connect(self.finPBar)
+        self.thread.filename = filename
+
+        self.thread.start()
+        self.dialog.show()
+
+    def updateValuePBar(self, value):
+        self.progressBar.setValue(value)
+        #print value
+        
+    def updateRangePBar(self, rangeMin, rangeMax):
+        self.progressBar.setRange(rangeMin, rangeMax)
+        #print (rangeMin, rangeMax)
+        
+    def updateTextPBar(self, text):
+        self.progressBar.label.setText(text)
+        #print text
+        
+    def finPBar(self, values):
+        self.dialog.hide()
         
         #Output the information in the text window
         logger.info(self.tr('Loaded layers: %s') % len(values.layers))

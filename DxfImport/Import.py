@@ -45,29 +45,41 @@ from PyQt4 import QtGui, QtCore
 from copy import deepcopy, copy
 from string import find, strip
 
-import logging
+import logging, time, Queue
 logger = logging.getLogger("DxfImport.Import") 
 
 
-class ReadDXF(QtCore.QObject):
+class ReadDXF(QtCore.QThread):
     #Initialise the class
-    def __init__(self, filename=None):
-        QtCore.QObject.__init__(self)
-
-
+    changeValue = QtCore.pyqtSignal(object)
+    changeRange = QtCore.pyqtSignal(object, object)
+    changeText = QtCore.pyqtSignal(str)
+    done = QtCore.pyqtSignal(object)
+    
+    def __init__(self, parent, filename):
+        super(ReadDXF, self).__init__()
+        #self.result_q = result_q
+        #self.stoprequest = threading.Event()
+        self.parent = parent
+        self.filename = filename
+    
+    def run(self):
         #Setting up logger
         #logger = g.logger.logger
+        
+        str_ = self.Read_File(self.filename)
 
-        str_ = self.Read_File(filename)
+        self.changeRange.emit(0, 0)
+        self.changeValue.emit(0)
         g.config.metric = self.Get_Unit(str_)
         
         #Load the contour and store the values in the classes
+        self.changeText.emit( "Loading contours..." )
         self.line_pairs = self.Get_Line_Pairs(str_)        
 
         #Debug Informationen 
         #logger.info(("\n\nFile has   %0.0f Lines" % len(str_)), 1)
         #logger.info(("\nFile has   %0.0f Linepairs" % self.line_pairs.nrs), 1)
-
         logger.info(self.tr("Reading DXF Structure"))
         sections_pos = self.Get_Sections_pos()
         self.layers = self.Read_Layers(sections_pos)
@@ -80,15 +92,22 @@ class ReadDXF(QtCore.QObject):
         #Schleife f�r die Anzahl der Bl�cke und den Layern
         #Call the class to define the contours of search
         #Loop for the number of blocks and the layer
+        self.changeText.emit( "Creating blocks' contours..." )
+        self.changeRange.emit(0, len(self.blocks.Entities))
+        self.changeValue.emit(0)
         for i in range(len(self.blocks.Entities)):
             # '\n'
             #print self.blocks.Entities[i]
             logger.info(self.tr("Creating Contours of Block Nr: %i") %i)
             self.blocks.Entities[i].cont = self.Get_Contour(self.blocks.Entities[i])
+            self.changeValue.emit(i + 1)
 
+        self.changeText.emit( "Creating entities' contours..." )
+        self.changeRange.emit(0, 0)
+        self.changeValue.emit(0)
         logger.info(self.tr("Creating Contours of Entities"))
         self.entities.cont = self.Get_Contour(self.entities)
-   
+        self.done.emit(self)
    
     def tr(self, string_to_translate):
         """
@@ -182,6 +201,7 @@ class ReadDXF(QtCore.QObject):
         """
         Get_Sections_pos()
         """
+        self.changeText.emit( "Recognizing blocks..." )
         sections = []
         
         start = self.line_pairs.index_both(0, "SECTION", 0)
@@ -216,6 +236,7 @@ class ReadDXF(QtCore.QObject):
         """
         Read_Layers()
         """
+        self.changeText.emit( "Recognizing layers..." )
         for sect_nr in range(len(section)):
             if(find(section[sect_nr].name, "TABLES") == 0):
                 tables_section = section[sect_nr]
@@ -245,6 +266,7 @@ class ReadDXF(QtCore.QObject):
         """
         Get_Blocks_pos()
         """
+        self.changeText.emit( "Defining blocks..." )
         for sect_nr in range(len(section)):
             if(find(section[sect_nr].name, "BLOCKS") == 0):
                 blocks_section = section[sect_nr]
@@ -275,6 +297,9 @@ class ReadDXF(QtCore.QObject):
         """
         Read_Blocks() - Read the block geometries
         """
+        self.changeText.emit( "Reading blocks' geometries..." )
+        self.changeRange.emit(0, len(blocks_pos))
+        self.changeValue.emit(0)
         blocks = BlocksClass([])
         for block_nr in range(len(blocks_pos)):
             logger.info("Reading Block %s; Nr: %i" % (blocks_pos[block_nr].name, block_nr))
@@ -305,19 +330,24 @@ class ReadDXF(QtCore.QObject):
             #Read the geometries
             blocks.Entities[-1].geo = self.Get_Geo(s, e)
             
+            self.changeValue.emit(block_nr + 1)
         return blocks
 
     def Read_Entities(self, sections):
         """
         Read_Entities() - Read the entities geometries
         """
+        self.changeText.emit( "Reading entities' geometries..." )
+        self.changeRange.emit(0, len(sections))
+        self.changeValue.emit(0)
         for section_nr in range(len(sections)):
             if (find(sections[section_nr - 1].name, "ENTITIES") == 0):
                 #g.logger.logger.info("Reading Entities", 1)
                 entities = EntitiesClass(0, 'Entities', [])
                 entities.geo = self.Get_Geo(sections[section_nr - 1].begin + 1,
                                                     sections[section_nr - 1].end - 1)
-         
+        
+            self.changeValue.emit(section_nr + 1)
         return entities
     
     def Get_Geo(self, begin, end):

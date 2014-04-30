@@ -39,9 +39,9 @@ APPNAME = "DXF2GCODE"
 VERSION = "PyQt4 Beta"
 
 
-DATE     =   "$Date::                     $"
-REVISION =   "$Rev::                      $"
-AUTHOR   =  u"$Author::                                  $"
+DATE     =   "$Date:: 2014-04-29 22:00:20#$"
+REVISION =   "$Rev:: 516                  $"
+AUTHOR   =  u"$Author:: jp1357                           $"
 
 CONFIG_EXTENSION = '.cfg'
 PY_EXTENSION = '.py'
